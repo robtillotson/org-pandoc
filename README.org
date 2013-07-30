@@ -1,0 +1,30 @@
+
+* org-pandoc
+
+This is an exporter for Org 8.0 that outputs via Pandoc, using Markdown as the intermediate format.  It is mainly intended to allow the creation of e-books via Org export; while Org's own LaTeX and HTML exporters are fine for PDF/print and web, it has no native way to make EPUBs and the like.  So to deal with those, we can use Pandoc to process a format that Org does know how to export.  Although Pandoc supports LaTeX, Markdown is used as the intermediate format here because it seems as though Pandoc has a harder time (stack overflows, etc.) with big LaTeX documents than it does with big Markdown documents.
+
+* Usage
+
+There are only two export entry points at present:
+
+- =org-pandoc-export-as-pandoc= (C-c C-e p P) :: Exports the Pandoc-flavored Markdown to a buffer.  This is probably not terribly interesting, as the only difference from the standard Markdown output is the title and author at the top of the file.
+- =org-pandoc-export-to-pandoc= (C-c C-e p p) :: Exports the Pandoc-flavored Markdown to a file, then postprocesses it with Pandoc.
+
+* Controlling Pandoc Postprocessing
+** Variables
+
+- =org-pandoc-output-format= :: A symbol naming the output format Pandoc should produce.  Defaults to ='epub=.
+- =org-pandoc-output-standalone= :: If =t=, adds the "-s" option to Pandoc which makes some output formats produce a single output file instead of multiple files.  (Useful for HTML, irrelevant to ePub.)
+- =org-pandoc-extra-options= :: A string containing extra options to Pandoc.  Having trouble with stack overflows?  Put the options to fix it here.
+- =org-pandoc-epub-rights= :: A default copyright statement for ePubs.  If nil (the default), a basic copyright statement will be generated.
+- =org-pandoc-epub-stylesheet= :: The path to a default ePub stylesheet, if any.
+
+** In-File Options
+
+- #+PANDOC_OPTIONS :: Add command line options to the Pandoc process.
+- #+EPUB_RIGHTS :: Set the copyright statement for the ePub metadata.
+- #+EPUB_COVER :: Path to a cover image for ePub output.
+- #+EPUB_STYLESHEET :: Path to a stylesheet for ePub output.
+
+The standard #+TITLE, #+AUTHOR, #+DATE, #+EMAIL, #+DESCRIPTION, and #+KEYWORDS options are also supported along with whatever other export options the standard Markdown exporter accepts.  The title, author, date, and email are passed to all Pandoc output formats, while description and keywords are inserted only in ePub.
+

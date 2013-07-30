@@ -42,7 +42,7 @@ to expand the stack here."
   :group 'org-export-pandoc
   :type 'string)
 
-(defcustom org-pandoc-output-format 'html
+(defcustom org-pandoc-output-format 'epub
   "Default output format for pandoc conversion."
   :group 'org-export-pandoc
   :type 'symbol)
@@ -52,20 +52,92 @@ to expand the stack here."
   :group 'org-export-pandoc
   :type 'boolean)
 
+(defcustom org-pandoc-epub-rights nil
+  "Copyright/license statement to include in EPUB metadata."
+  :group 'org-export-pandoc
+  :type 'string)
+
+(defcustom org-pandoc-epub-stylesheet nil
+  "Stylesheet to apply to EPUB files."
+  :group 'org-export-pandoc
+  :type 'string)
+
+(defvar org-pandoc---epub-metadata nil)
+(defvar org-pandoc---epub-cover-filename nil)
+(defvar org-pandoc---epub-stylesheet-filename nil)
+(defvar org-pandoc---command-options nil)
+
 (org-export-define-derived-backend 'pandoc 'md
   :menu-entry
-  '(?d "Export to Pandoc"
-       ((?P "Intermediate to temp buffer"
+  '(?p "Export with Pandoc"
+       ((?P "Markdown to buffer"
             (lambda (a s v b) (org-pandoc-export-as-pandoc a s v)))
         (?p "To file"
             (lambda (a s v b) (org-pandoc-export-to-pandoc a s v)))))
-  :translate-alist '((template . org-pandoc-template)))
+  :translate-alist '((template . org-pandoc-template))
+  :options-alist '((:epub-rights "EPUB_RIGHTS" nil org-pandoc-epub-rights t)
+                   (:epub-cover "EPUB_COVER" nil nil t)
+                   (:epub-stylesheet "EPUB_STYLESHEET" nil org-pandoc-epub-stylesheet t)
+                   (:pandoc-options "PANDOC_OPTIONS" nil org-pandoc-extra-options 'space)
+                   ))
+
+;; Some simple XML escaping code.  I'm surprised this isn't
+;; already in emacs somewhere...
+
+(defvar org-pandoc-xml-escapes
+  '(("&"  . "&amp;")
+    ("'"  . "&apos;")
+    ("\"" . "&quot;")
+    ("<"  . "&lt;")
+    (">"  . "&gt;")))
+
+(defun org-pandoc-escape-xml (string)
+  (mapc #'(lambda (item)
+            (setq string
+                  (replace-regexp-in-string (car item) (cdr item) string)))
+        org-pandoc-xml-escapes)
+  string)
+
+(defun org-pandoc-make-copyright-string (author email)
+  (format "Copyright %s %s%s" (format-time-string "%Y") author
+          (if email
+              (format " <%s>" email)
+            "")))
 
 (defun org-pandoc-template (contents info)
-  (let ((title (org-export-data (plist-get info :title) info))
-        (author (org-export-data (plist-get info :author) info)))
-    (concat "% " title "\n"
-            "% " author "\n"
+  (let ((title (plist-get info :title))
+        (author (plist-get info :author))
+        (email (plist-get info :email))
+        (description (plist-get info :description))
+        (keywords (plist-get info :keywords))
+        (date (org-export-get-date info "%Y-%m-%d"))
+        (rights (plist-get info :epub-rights)))
+    ;; Since the info alist isn't available after the export, build the metadata
+    ;; now and put it in a buffer local variable. 
+    (if (or (eq org-pandoc-output-format 'epub)
+            (eq org-pandoc-output-format 'epub3))
+        (let ((xml (concat
+                    (when description
+                      (format "<dc:description>%s</dc:description>\n" (org-pandoc-escape-xml description)))
+                    (format "<dc:rights>%s</dc:rights>\n"
+                            (org-pandoc-escape-xml (or rights
+                                                       (org-pandoc-make-copyright-string (org-export-data author info) (org-export-data email info)))))
+                    (when keywords
+                      (format "<dc:subject>%s</dc:subject>\n" (org-pandoc-escape-xml keywords))))))
+          (setq org-pandoc---epub-stylesheet-filename (plist-get info :epub-stylesheet))
+          (setq org-pandoc---epub-metadata xml)
+          (setq org-pandoc---epub-cover-filename (plist-get info :epub-cover)))
+      (progn
+        (setq org-pandoc---epub-stylesheet-filename nil)
+        (setq org-pandoc---epub-metadata nil)
+        (setq org-pandoc---epub-cover-filename nil)))
+    (setq org-pandoc---command-options (plist-get info :pandoc-options))
+    (concat (format "%% %s\n" (org-export-data title info))
+            (when (and (plist-get info :with-author)
+                       author)
+              (format "%% %s\n" (org-export-data author info)))
+            (when (plist-get info :with-date)
+              (format "%% %s\n" (org-export-data date info)))
             "\n"
             contents)))
 
@@ -86,22 +158,37 @@ to expand the stack here."
       (when org-export-show-temporary-export-buffer
         (switch-to-buffer-other-window outbuf)))))
 
-(defun org-pandoc-run-pandoc (filename outfilename format &optional options)
-  (let* ((args (list "-t" (symbol-name format)
+(defun org-pandoc-run-pandoc (filename outfilename output-format &optional options)
+  (let* ((args (list "-t" (symbol-name output-format)
                      "-o" outfilename
-                     org-pandoc-extra-options
                      options
                      filename))
          (command (concat org-pandoc-command " " (mapconcat 'identity args " "))))
-    (message "Running pandoc: %s" (shell-command-to-string command))))
+    (message "Running pandoc as: %s" command)
+    (message "Ran pandoc: %s" (shell-command-to-string command))))
 
 (defun org-pandoc-export-to-file (&optional outfile subtreep visible-only)
-  (let* ((format org-pandoc-output-format)
-         (standalone org-pandoc-output-standalone)
-         (options (concat (if standalone " -s")))
-         (pandoc-output (concat (file-name-base outfile) "." (symbol-name format))))
+  (let ((metadata-file (make-temp-file "org-pandoc" nil ".xml"))
+        (pandoc-output (concat (file-name-base outfile) "." (symbol-name org-pandoc-output-format))))
     (org-export-to-file 'pandoc outfile subtreep visible-only)
-    (org-pandoc-run-pandoc outfile pandoc-output format options)
+    ;; I really hate passing info back with global variables, but I don't know how
+    ;; else to do it.  Can't use a buffer local variable because the current buffer
+    ;; is different in this function than when the export is actually running and
+    ;; we have access to the info plist.
+    (let ((options (concat (when org-pandoc-output-standalone " -s")
+                           (when org-pandoc---epub-cover-filename
+                             (format " --epub-cover-image=%s" org-pandoc---epub-cover-filename))
+                           (when org-pandoc---epub-stylesheet-filename
+                             (format " --epub-stylesheet=%s" org-pandoc---epub-stylesheet-filename))
+                           (when org-pandoc---command-options
+                             (concat " " org-pandoc---command-options)))))
+      (when org-pandoc---epub-metadata
+        (message "metadata: %s" org-pandoc---epub-metadata)
+        (with-temp-file metadata-file
+          (insert org-pandoc---epub-metadata))
+        (setq options (concat options " --epub-metadata=" metadata-file)))
+      (org-pandoc-run-pandoc outfile pandoc-output org-pandoc-output-format options))
+    (delete-file metadata-file)
     ))
 
 (defun org-pandoc-export-to-pandoc (&optional async subtreep visible-only)
