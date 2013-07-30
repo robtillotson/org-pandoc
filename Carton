@@ -1,0 +1,5 @@
+(source "melpa" "http://melpa.milkbox.net/packages/")
+
+(package "org-pandoc" "1.0" "Export from Org using Pandoc")
+
+(depends-on "org" "8.0")

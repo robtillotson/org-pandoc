@@ -1,13 +1,37 @@
-;;; ox-pandoc.el --- Pandoc backend for org-mode exporter
+;;; ox-pandoc.el --- Org exporter using Pandoc
 
 ;; Copyright 2013 Rob Tillotson
 
 ;; Author: Rob Tillotson <rob@pyrite.org>
+;; Created: 2013-07-29
+;; Version: 1.0
+;; Package-Requires: ((org "8.0"))
+
+;; This file is not part of GNU Emacs.
+
+;;; License:
+
+;; Permission is hereby granted, free of charge, to any person obtaining a copy of
+;; this software and associated documentation files (the "Software"), to deal in
+;; the Software without restriction, including without limitation the rights to
+;; use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
+;; the Software, and to permit persons to whom the Software is furnished to do so,
+;; subject to the following conditions:
+
+;; The above copyright notice and this permission notice shall be included in all
+;; copies or substantial portions of the Software.
+
+;; THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+;; IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+;; FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+;; COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+;; IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+;; CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ;;; Commentary:
 
 ;; This is a pandoc exporter for Org, built upon Markdown as an
-;; intermediate format.
+;; intermediate format, and targeted at production of e-books in ePub format.
 
 ;;; Code:
 
@@ -183,7 +207,6 @@ to expand the stack here."
                            (when org-pandoc---command-options
                              (concat " " org-pandoc---command-options)))))
       (when org-pandoc---epub-metadata
-        (message "metadata: %s" org-pandoc---epub-metadata)
         (with-temp-file metadata-file
           (insert org-pandoc---epub-metadata))
         (setq options (concat options " --epub-metadata=" metadata-file)))
